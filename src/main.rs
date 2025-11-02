@@ -6,8 +6,6 @@ use http::{Method, Request};
 use quinn::{ClientConfig, Connection, Endpoint};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
-use tokio::time::sleep;
-use std::time::Duration;
 
 #[derive(Serialize)]
 struct RegisterRequest<'a> {
