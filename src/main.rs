@@ -6,6 +6,8 @@ use http::{Method, Request};
 use quinn::{ClientConfig, Connection, Endpoint};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+use tokio::time::sleep;
+use std::time::Duration;
 
 #[derive(Serialize)]
 struct RegisterRequest<'a> {
@@ -27,7 +29,7 @@ struct RefreshRequest<'a> {
 
 #[derive(Deserialize, Debug, Clone)]
 struct AuthResponse {
-    token: Option<String>,
+    access_token: Option<String>,   // renamed from `token` to `access_token`
     refresh_token: Option<String>,
     message: Option<String>,
 }
@@ -228,8 +230,8 @@ async fn main() -> Result<()> {
     {
         Ok(r) => {
             info!("login: {:?}", r);
-            // prefer `token` field if server uses that name, otherwise `access_token` may be used by some APIs
-            if let Some(t) = r.token {
+            // prefer `access_token` field name (server uses access_token)
+            if let Some(t) = r.access_token {
                 access_token = Some(t);
             }
             if let Some(rt) = r.refresh_token {
@@ -240,13 +242,13 @@ async fn main() -> Result<()> {
     }
 
     // If we have a refresh token, call /refresh (and update tokens if returned)
-    if let Some(ref rt) = refresh_token.clone() {
-        let refresh_req = RefreshRequest { refresh_token: rt };
+    if let Some(ref rt) = refresh_token {
+        let refresh_req = RefreshRequest { refresh_token: rt.as_str() };
         match send_json_request::<_, AuthResponse>(&mut sender, Method::POST, &base_url, "/refresh", &refresh_req, None).await {
             Ok(r) => {
                 info!("refresh: {:?}", r);
                 // update tokens if returned
-                if let Some(t) = r.token {
+                if let Some(t) = r.access_token {
                     access_token = Some(t);
                 }
                 if let Some(nrt) = r.refresh_token {
@@ -258,6 +260,10 @@ async fn main() -> Result<()> {
     } else {
         warn!("No refresh token available after login; skipping refresh request.");
     }
+
+    // --- ADD 2 SECOND DELAY BEFORE GET /profile ---
+    // Wait 2 seconds before requesting profile
+    //sleep(Duration::from_secs(2)).await;
 
     // GET /profile using Authorization header if access_token exists
     if let Some(ref at) = access_token {
